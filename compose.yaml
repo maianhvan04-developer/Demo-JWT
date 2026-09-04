@@ -1,0 +1,140 @@
+name: jwt-finance-demo
+
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    container_name: jwt-demo-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Copy .env.example to .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    container_name: jwt-demo-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    networks:
+      - edge
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  finance-api:
+    image: jwt-finance-demo/finance-api:1.0.0
+    build:
+      context: ./finance-api
+    container_name: jwt-demo-finance-api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      ISSUER: http://localhost:${KEYCLOAK_PORT:-8080}/realms/finance-lab
+      JWKS_URL: http://keycloak:8080/realms/finance-lab/protocol/openid-connect/certs
+      AUDIENCE: finance-api
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: finance
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGSSLMODE: disable
+    expose:
+      - "4000"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - edge
+      - data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  api-gateway:
+    image: jwt-finance-demo/api-gateway:1.0.0
+    build:
+      context: ./api-gateway
+    container_name: jwt-demo-api-gateway
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      ISSUER: http://localhost:${KEYCLOAK_PORT:-8080}/realms/finance-lab
+      JWKS_URL: http://keycloak:8080/realms/finance-lab/protocol/openid-connect/certs
+      AUDIENCE: finance-api
+      FINANCE_API_URL: http://finance-api:4000
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    depends_on:
+      finance-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  edge:
+    name: jwt-demo-edge
+    driver: bridge
+  data:
+    name: jwt-demo-data
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+    name: jwt-demo-postgres-data

@@ -1,0 +1,87 @@
+{
+  "realm": "finance-lab",
+  "enabled": true,
+  "displayName": "Finance JWT Lab",
+  "accessTokenLifespan": 30,
+  "ssoSessionIdleTimeout": 600,
+  "ssoSessionMaxLifespan": 1800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "roles": {
+    "realm": [
+      { "name": "finance.read", "description": "Read finance data" },
+      { "name": "finance.admin", "description": "Admin finance data" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "lab-client",
+      "name": "JWT Lab Client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:*/*"],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "finance-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "finance-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "wrong-audience-client",
+      "name": "Wrong Audience Test Client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true
+    },
+    {
+      "clientId": "finance-api",
+      "name": "Finance API Resource",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Finance",
+      "credentials": [
+        { "type": "password", "value": "Alice@123", "temporary": false }
+      ],
+      "realmRoles": ["finance.read"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "NoRole",
+      "credentials": [
+        { "type": "password", "value": "Bob@123", "temporary": false }
+      ]
+    }
+  ]
+}

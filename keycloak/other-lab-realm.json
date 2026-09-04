@@ -1,0 +1,48 @@
+{
+  "realm": "other-lab",
+  "enabled": true,
+  "displayName": "Other Issuer Lab",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "finance.read" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "other-client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "finance-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "finance-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "eve",
+      "enabled": true,
+      "email": "eve@example.test",
+      "emailVerified": true,
+      "firstName": "Eve",
+      "lastName": "OtherRealm",
+      "credentials": [
+        { "type": "password", "value": "Eve@123", "temporary": false }
+      ],
+      "realmRoles": ["finance.read"]
+    }
+  ]
+}
