@@ -6,6 +6,30 @@ Gateway và Finance API cùng kiểm tra chữ ký RS256 qua JWKS, thời hạn 
 
 > Toàn bộ tài khoản, mật khẩu và dữ liệu trong project là dữ liệu giả lập cho lab. Không dùng cấu hình `start-dev`, HTTP hoặc các mật khẩu này trong production.
 
+## Mô hình token
+
+Khi mở rộng thành ứng dụng web, mô hình khuyến nghị là:
+
+```text
+Client ──đăng nhập──> Keycloak ──cấp──> Access Token + Refresh Token
+                                           │                 │
+                                           ▼                 ▼
+                                    Access token        Refresh token
+                                    lưu trong RAM       HttpOnly Cookie
+                                           │                 │
+                              Authorization: Bearer           │ khi access token hết hạn
+                                           ▼                 │
+                                      API Gateway             └────> Keycloak
+                                           │                          │
+                                           ▼                   cấp bộ token mới
+                                      Finance API
+                                           │
+                                           ▼
+                                      PostgreSQL
+```
+
+Trong demo CLI hiện tại, cả hai token chỉ được giữ tạm trong RAM của tiến trình PowerShell; demo chưa tạo cookie trình duyệt. Chi tiết và sơ đồ đầy đủ nằm trong [docs/DEMO-DESIGN.md](docs/DEMO-DESIGN.md).
+
 ## 1. Chuẩn bị
 
 Cần cài Docker Desktop và Docker Compose.
@@ -128,7 +152,7 @@ docker network inspect jwt-demo-data
 docker compose logs --tail 50 api-gateway finance-api keycloak postgres
 ```
 
-Thiết kế chi tiết, trust boundary và bảng giao tiếp nằm tại [docs/DEMO-DESIGN.md](docs/DEMO-DESIGN.md).
+Thiết kế chi tiết, trust boundary và bảng giao tiếp nằm tại [docs/DEMO-DESIGN.md](docs/DEMO-DESIGN.md). Bản báo cáo Word đã đồng bộ với demo nằm tại [docs/Bao_cao_JWT_an_toan_hoan_chinh.docx](docs/Bao_cao_JWT_an_toan_hoan_chinh.docx).
 
 ## 7. Tài khoản giả lập
 
@@ -173,7 +197,9 @@ Lệnh `down -v` xóa volume `jwt-demo-postgres-data`; chỉ dùng khi muốn re
 │   ├── network-test.ps1
 │   └── demo.ps1
 └── docs/
-    └── DEMO-DESIGN.md
+    ├── DEMO-DESIGN.md
+    ├── token-storage-model.png
+    └── Bao_cao_JWT_an_toan_hoan_chinh.docx
 ```
 
 Các image nền đều ghim phiên bản: PostgreSQL `17.11-alpine`, Keycloak `26.7.3` và Node.js `22.23.2-alpine`.

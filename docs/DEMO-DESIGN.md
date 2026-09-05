@@ -2,7 +2,31 @@
 
 Tài liệu này mô tả phần thiết kế có thể kiểm chứng trực tiếp từ demo. Đây không phải báo cáo lý thuyết 15–25 trang.
 
-## 1. Luồng cấp và kiểm tra token
+## 1. Mô hình cấp, lưu và sử dụng token
+
+Mô hình dưới đây là phương án khuyến nghị khi demo được phát triển thành ứng dụng web. Access token có vòng đời ngắn được giữ trong RAM và gửi qua header `Authorization: Bearer`. Refresh token được bảo vệ bằng cookie `HttpOnly`, kết hợp `Secure` và `SameSite`, rồi chỉ dùng với Keycloak để xin bộ token mới khi access token hết hạn.
+
+```mermaid
+flowchart TB
+    C[Client / trình duyệt] -->|Đăng nhập| KC[Keycloak]
+    KC -->|Cấp token| PAIR[Access Token + Refresh Token]
+
+    PAIR --> AT[Access token<br/>lưu trong RAM]
+    PAIR --> RT[Refresh token<br/>HttpOnly Cookie]
+
+    AT -->|Authorization: Bearer| GW[API Gateway<br/>kiểm tra JWT]
+    GW -->|Proxy + Bearer JWT| API[Finance API<br/>kiểm tra lại JWT và role]
+    API -->|SQL| DB[(PostgreSQL<br/>nội bộ)]
+
+    RT -. Khi access token hết hạn .-> KC
+    KC -. Cấp bộ token mới .-> PAIR
+```
+
+![Mô hình lưu và sử dụng token an toàn](token-storage-model.png)
+
+Demo hiện tại là CLI PowerShell, chưa có client web và chưa thiết lập cookie trình duyệt. Vì vậy, trong các script kiểm thử, cả access token và refresh token chỉ tồn tại tạm thời trong biến RAM của tiến trình. Sơ đồ trên mô tả cách lưu token khi mở rộng demo thành ứng dụng web, không mô tả sai rằng script hiện tại đã sử dụng cookie.
+
+## 2. Luồng kiểm tra token trong demo hiện tại
 
 ```mermaid
 sequenceDiagram
@@ -29,7 +53,7 @@ sequenceDiagram
 
 Gateway kiểm tra JWT ở biên. Finance API kiểm tra lại token và role để tạo lớp phòng thủ thứ hai nếu request nội bộ bị gửi sai hoặc Gateway bị bypass trong một môi trường khác.
 
-## 2. Docker network và trust boundary
+## 3. Docker network và trust boundary
 
 ```mermaid
 flowchart LR
@@ -58,7 +82,7 @@ flowchart LR
 
 `edge` cho phép Gateway gọi Finance API và cả hai dịch vụ lấy JWKS từ Keycloak. `data` được đánh dấu `internal: true`; chỉ PostgreSQL, Keycloak và Finance API tham gia. Gateway không tham gia `data`, vì vậy không có đường mạng trực tiếp tới PostgreSQL.
 
-## 3. Container, image, cổng, volume và network
+## 4. Container, image, cổng, volume và network
 
 | Service | Image | Cổng host | Cổng nội bộ | Volume | Network |
 |---|---|---:|---:|---|---|
@@ -67,7 +91,7 @@ flowchart LR
 | `keycloak` | `quay.io/keycloak/keycloak:26.7.3` | 8080 | 8080 | Realm JSON read-only | `edge`, `data` |
 | `postgres` | `postgres:17.11-alpine` | Không | 5432 | `jwt-demo-postgres-data`, init SQL read-only | `data` |
 
-## 4. Ma trận giao tiếp
+## 5. Ma trận giao tiếp
 
 | Nguồn | Đích | Cho phép | Lý do |
 |---|---|---:|---|
@@ -82,7 +106,7 @@ flowchart LR
 | Finance API | PostgreSQL | Có | Đọc dữ liệu tài khoản |
 | Keycloak | PostgreSQL | Có | Lưu realm, user, client và session |
 
-## 5. Kiểm soát an toàn có trong demo
+## 6. Kiểm soát an toàn có trong demo
 
 - Chỉ chấp nhận thuật toán `RS256`.
 - Kiểm tra `iss`, `aud`, `exp` và loại token tại hai lớp.
@@ -97,7 +121,7 @@ flowchart LR
 - Secret hạ tầng lấy từ `.env`; bài nộp chỉ chứa `.env.example` với giá trị giả lập.
 - Image và dependency được ghim phiên bản/lockfile.
 
-## 6. Giới hạn có chủ đích
+## 7. Giới hạn có chủ đích
 
 - Keycloak chạy `start-dev` và HTTP để demo trên localhost.
 - Password grant được bật để script kiểm thử tự động lấy token; ứng dụng production nên dùng Authorization Code + PKCE cho người dùng tương tác.
